@@ -1,0 +1,14 @@
+torch
+einops
+timm
+transformers
+samv2
+supervision
+python-dotenv
+opencv-python-headless
+pytest
+sentencepiece       
+protobuf
+accelerate
+
+gradio
