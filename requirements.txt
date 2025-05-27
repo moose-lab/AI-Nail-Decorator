@@ -1,7 +1,7 @@
-torch
+torch>=2.3.1
 einops
 timm
-transformers
+transformers==4.49.0
 samv2
 supervision
 python-dotenv

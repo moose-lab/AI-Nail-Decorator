@@ -21,13 +21,13 @@ FLORENCE_CAPTION_TO_PHRASE_GROUNDING_TASK = os.getenv("FLORENCE_CAPTION_TO_PHRAS
 FLORENCE_OPEN_VOCABULARY_DETECTION_TASK = os.getenv("FLORENCE_OPEN_VOCABULARY_DETECTION_TASK")
 FLORENCE_DENSE_REGION_CAPTION_TASK = os.getenv("FLORENCE_DENSE_REGION_CAPTION_TASK")
 
-
 def fixed_get_imports(filename: Union[str, os.PathLike]) -> list[str]:
     """Work around for https://huggingface.co/microsoft/phi-1_5/discussions/72."""
     if not str(filename).endswith("/modeling_florence2.py"):
         return get_imports(filename)
     imports = get_imports(filename)
-    imports.remove("flash_attn")
+    if "flash_attn" in imports:
+        imports.remove("flash_attn")
     return imports
 
 

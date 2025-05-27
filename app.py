@@ -1,16 +1,107 @@
 import os
+from typing import Tuple, Optional
 
 import cv2
 import gradio as gr
+import numpy as np
+import supervision as sv
+import torch
+from PIL import Image
+from tqdm import tqdm
 
-from services.florence_vlm import (
-    load_florence_model, 
-    run_florence_inference,
-    FLORENCE_DETAILED_CAPTION_TASK,
-    FLORENCE_CAPTION_TO_PHRASE_GROUNDING_TASK,
-    FLORENCE_OPEN_VOCABULARY_DETECTION_TASK
-)
+from services.florence_vlm import load_florence_model, run_florence_inference, \
+    FLORENCE_DETAILED_CAPTION_TASK, \
+    FLORENCE_CAPTION_TO_PHRASE_GROUNDING_TASK, FLORENCE_OPEN_VOCABULARY_DETECTION_TASK
 from services.segment_anything_model import load_sam_image_model, run_sam_inference
+
+DEVICE = torch.device("cuda")
+# DEVICE = torch.device("cpu")
+
+# 禁用一些可能导致内核问题的CUDA优化
+if torch.cuda.is_available():
+    # 使用更保守的设置来避免内核兼容性问题
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
+    torch.backends.cudnn.benchmark = False
+    
+    # 只在支持的情况下使用autocast
+    try:
+        torch.autocast(device_type="cuda", dtype=torch.float16).__enter__()
+    except:
+        print("警告: CUDA autocast 不可用，使用默认精度")
+
+
+FLORENCE_MODEL, FLORENCE_PROCESSOR = load_florence_model(device=DEVICE)
+SAM_IMAGE_MODEL = load_sam_image_model(device=DEVICE)
+# SAM_VIDEO_MODEL = load_sam_video_model(device=DEVICE)
+COLORS = ['#FF1493', '#00BFFF', '#FF6347', '#FFD700', '#32CD32', '#8A2BE2']
+COLOR_PALETTE = sv.ColorPalette.from_hex(COLORS)
+BOX_ANNOTATOR = sv.BoxAnnotator(color=COLOR_PALETTE, color_lookup=sv.ColorLookup.INDEX)
+LABEL_ANNOTATOR = sv.LabelAnnotator(
+    color=COLOR_PALETTE,
+    color_lookup=sv.ColorLookup.INDEX,
+    text_position=sv.Position.CENTER_OF_MASS,
+    text_color=sv.Color.from_hex("#000000"),
+    border_radius=5
+)
+MASK_ANNOTATOR = sv.MaskAnnotator(
+    color=COLOR_PALETTE,
+    color_lookup=sv.ColorLookup.INDEX
+)
+
+
+def annotate_image(image, prompt, detections):
+    output_image = image.copy()
+    mask_image = np.zeros((image.height, image.width), dtype=np.uint8)
+    for mask in detections.mask:
+        mask_image[mask] = 255
+    
+    # mask_image = MASK_ANNOTATOR_0.annotate(output_image, detections)
+    # output_image = MASK_ANNOTATOR.annotate(output_image, detections)
+
+    # 新增：创建目标的透明图
+    obj_image = Image.new("RGBA", output_image.size)
+    obj_image.paste(output_image, (0, 0), Image.fromarray(mask_image))  # 使用遮罩图作为透明度
+
+    inverted_mask = 255 - mask_image
+    # input_image_editor = {
+    #     "background": output_image,
+    #     "layers": [Image.fromarray(inverted_mask)]
+    # }
+    # flux_image = process_with_flux(input_image_editor, prompt, 42, True, 0.85, 50)
+    return None, Image.fromarray(inverted_mask)
+
+def process_image(
+    image_input, text_prompt = "e-commerce poster background", text_input = "The Nails"
+) -> Tuple[Optional[Image.Image], Optional[str]]:
+    if not image_input:
+        gr.Info("Please upload an image.")
+        return None, None
+
+    texts = [text_input]
+    detections_list = []
+    # firstly florence-2 model to detect the object box border via ovd model
+    for text in texts:
+        _, result = run_florence_inference(
+            model=FLORENCE_MODEL,
+            processor=FLORENCE_PROCESSOR,
+            device=DEVICE,
+            image=image_input,
+            task=FLORENCE_OPEN_VOCABULARY_DETECTION_TASK,
+            text=text
+        )
+        detections = sv.Detections.from_lmm(
+            lmm=sv.LMM.FLORENCE_2,
+            result=result,
+            resolution_wh=image_input.size
+        )
+        # secondly, extract the object mask via sam model
+        detections = run_sam_inference(SAM_IMAGE_MODEL, image_input, detections)
+        detections_list.append(detections)
+
+    detections = sv.Detections.merge(detections_list)
+    detections = run_sam_inference(SAM_IMAGE_MODEL, image_input, detections)
+    return annotate_image(image_input, text_prompt, detections)
 
 
 with gr.Blocks() as demo:
