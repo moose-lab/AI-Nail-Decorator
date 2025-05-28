@@ -10,45 +10,15 @@ from PIL import Image
 from tqdm import tqdm
 
 from services.florence_vlm import load_florence_model, run_florence_inference, \
-    FLORENCE_DETAILED_CAPTION_TASK, \
-    FLORENCE_CAPTION_TO_PHRASE_GROUNDING_TASK, FLORENCE_OPEN_VOCABULARY_DETECTION_TASK
+    FLORENCE_OPEN_VOCABULARY_DETECTION_TASK
 from services.segment_anything_model import load_sam_image_model, run_sam_inference
 
 DEVICE = torch.device("cuda")
-# DEVICE = torch.device("cpu")
-
-# 禁用一些可能导致内核问题的CUDA优化
-if torch.cuda.is_available():
-    # 使用更保守的设置来避免内核兼容性问题
-    torch.backends.cuda.matmul.allow_tf32 = False
-    torch.backends.cudnn.allow_tf32 = False
-    torch.backends.cudnn.benchmark = False
-    
-    # 只在支持的情况下使用autocast
-    try:
-        torch.autocast(device_type="cuda", dtype=torch.float16).__enter__()
-    except:
-        print("警告: CUDA autocast 不可用，使用默认精度")
 
 
 FLORENCE_MODEL, FLORENCE_PROCESSOR = load_florence_model(device=DEVICE)
 SAM_IMAGE_MODEL = load_sam_image_model(device=DEVICE)
 # SAM_VIDEO_MODEL = load_sam_video_model(device=DEVICE)
-COLORS = ['#FF1493', '#00BFFF', '#FF6347', '#FFD700', '#32CD32', '#8A2BE2']
-COLOR_PALETTE = sv.ColorPalette.from_hex(COLORS)
-BOX_ANNOTATOR = sv.BoxAnnotator(color=COLOR_PALETTE, color_lookup=sv.ColorLookup.INDEX)
-LABEL_ANNOTATOR = sv.LabelAnnotator(
-    color=COLOR_PALETTE,
-    color_lookup=sv.ColorLookup.INDEX,
-    text_position=sv.Position.CENTER_OF_MASS,
-    text_color=sv.Color.from_hex("#000000"),
-    border_radius=5
-)
-MASK_ANNOTATOR = sv.MaskAnnotator(
-    color=COLOR_PALETTE,
-    color_lookup=sv.ColorLookup.INDEX
-)
-
 
 def annotate_image(image, prompt, detections):
     output_image = image.copy()
@@ -87,7 +57,7 @@ def process_image(
             result=result,
             resolution_wh=image_input.size
         )
-        
+
         # secondly, extract the object mask via sam model
         detections = run_sam_inference(SAM_IMAGE_MODEL, image_input, detections)
         detections_list.append(detections)
