@@ -55,24 +55,16 @@ def annotate_image(image, prompt, detections):
     mask_image = np.zeros((image.height, image.width), dtype=np.uint8)
     for mask in detections.mask:
         mask_image[mask] = 255
-    
-    # mask_image = MASK_ANNOTATOR_0.annotate(output_image, detections)
-    # output_image = MASK_ANNOTATOR.annotate(output_image, detections)
 
     # 新增：创建目标的透明图
     obj_image = Image.new("RGBA", output_image.size)
     obj_image.paste(output_image, (0, 0), Image.fromarray(mask_image))  # 使用遮罩图作为透明度
 
     inverted_mask = 255 - mask_image
-    # input_image_editor = {
-    #     "background": output_image,
-    #     "layers": [Image.fromarray(inverted_mask)]
-    # }
-    # flux_image = process_with_flux(input_image_editor, prompt, 42, True, 0.85, 50)
     return None, Image.fromarray(inverted_mask)
 
 def process_image(
-    image_input, text_prompt = "e-commerce poster background", text_input = "The Nails"
+    image_input, text_prompt = "", text_input = "human fingernails"
 ) -> Tuple[Optional[Image.Image], Optional[str]]:
     if not image_input:
         gr.Info("Please upload an image.")
@@ -95,6 +87,7 @@ def process_image(
             result=result,
             resolution_wh=image_input.size
         )
+        
         # secondly, extract the object mask via sam model
         detections = run_sam_inference(SAM_IMAGE_MODEL, image_input, detections)
         detections_list.append(detections)
