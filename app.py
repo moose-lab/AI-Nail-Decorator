@@ -12,6 +12,7 @@ from tqdm import tqdm
 from services.florence_vlm import load_florence_model, run_florence_inference, \
     FLORENCE_OPEN_VOCABULARY_DETECTION_TASK
 from services.segment_anything_model import load_sam_image_model, run_sam_inference
+from services.flux_inpainting import generate_manicure
 
 DEVICE = torch.device("cuda")
 
@@ -20,27 +21,29 @@ FLORENCE_MODEL, FLORENCE_PROCESSOR = load_florence_model(device=DEVICE)
 SAM_IMAGE_MODEL = load_sam_image_model(device=DEVICE)
 # SAM_VIDEO_MODEL = load_sam_video_model(device=DEVICE)
 
-def annotate_image(image, prompt, detections):
+def generate_output(image, prompt, detections):
     output_image = image.copy()
     mask_image = np.zeros((image.height, image.width), dtype=np.uint8)
     for mask in detections.mask:
         mask_image[mask] = 255
+    mask_image = Image.fromarray(mask_image)
 
     # 新增：创建目标的透明图
     obj_image = Image.new("RGBA", output_image.size)
-    obj_image.paste(output_image, (0, 0), Image.fromarray(mask_image))  # 使用遮罩图作为透明度
+    obj_image.paste(output_image, (0, 0), mask_image)  # 使用遮罩图作为透明度
 
-    inverted_mask = 255 - mask_image
-    return None, Image.fromarray(inverted_mask)
+    # 创建：生成结果图
+    output = generate_manicure(output_image, mask_image, prompt)
+
+    return output, obj_image
 
 def process_image(
-    image_input, text_prompt = "", text_input = "human fingernails"
+    image_input, text_prompt = "", texts = ["all human fingernails"]
 ) -> Tuple[Optional[Image.Image], Optional[str]]:
     if not image_input:
         gr.Info("Please upload an image.")
         return None, None
 
-    texts = [text_input]
     detections_list = []
     # firstly florence-2 model to detect the object box border via ovd model
     for text in texts:
@@ -64,7 +67,7 @@ def process_image(
 
     detections = sv.Detections.merge(detections_list)
     detections = run_sam_inference(SAM_IMAGE_MODEL, image_input, detections)
-    return annotate_image(image_input, text_prompt, detections)
+    return generate_output(image_input, text_prompt, detections)
 
 
 with gr.Blocks() as demo:
