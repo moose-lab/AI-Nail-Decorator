@@ -2,7 +2,7 @@ torch>=2.3.1
 einops
 timm
 transformers==4.49.0
-samv2
+sam2
 supervision
 python-dotenv
 opencv-python-headless
