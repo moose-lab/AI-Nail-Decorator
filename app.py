@@ -12,7 +12,8 @@ from tqdm import tqdm
 from services.florence_vlm import load_florence_model, run_florence_inference, \
     FLORENCE_OPEN_VOCABULARY_DETECTION_TASK
 from services.segment_anything_model import load_sam_image_model, run_sam_inference
-from services.flux_inpainting import generate_manicure
+# from services.flux_inpainting import generate_manicure
+from services.sdxl_inpainting import generate_manicure
 
 DEVICE = torch.device("cuda")
 
@@ -32,8 +33,8 @@ def generate_output(image, prompt, detections):
     obj_image = Image.new("RGBA", output_image.size)
     obj_image.paste(output_image, (0, 0), mask_image)  # 使用遮罩图作为透明度
 
-    # 创建：生成结果图
-    output = generate_manicure(output_image, mask_image, prompt)
+    # 创建：生成结果图 - 修复生成器调用
+    output = list(generate_manicure(output_image, mask_image, prompt))[-1]
 
     return output, obj_image
 

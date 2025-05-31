@@ -3,9 +3,9 @@ import torch
 from PIL import Image
 
 from diffusers.utils import check_min_version
-from .controlnet_flux import FluxControlNetModel
-from .transformer_flux import FluxTransformer2DModel
-from .pipeline_flux_controlnet_inpaint import FluxControlNetInpaintingPipeline
+from .flux.controlnet_flux import FluxControlNetModel
+from .flux.transformer_flux import FluxTransformer2DModel
+from .flux.pipeline_flux_controlnet_inpaint import FluxControlNetInpaintingPipeline
 
 # Input the hf_token to download the model
 import huggingface_hub
