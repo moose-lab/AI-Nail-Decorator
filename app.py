@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Tuple, Optional
 
 import cv2
@@ -17,6 +18,15 @@ from services.sdxl_inpainting import generate_manicure
 
 DEVICE = torch.device("cuda")
 
+# Load templates
+def load_templates() -> list[dict]:
+    try:
+        with open("template.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+
+TEMPLATES = load_templates()
 
 FLORENCE_MODEL, FLORENCE_PROCESSOR = load_florence_model(device=DEVICE)
 SAM_IMAGE_MODEL = load_sam_image_model(device=DEVICE)
@@ -70,6 +80,15 @@ def process_image(
     detections = run_sam_inference(SAM_IMAGE_MODEL, image_input, detections)
     return generate_output(image_input, text_prompt, detections)
 
+def on_template_select(evt: gr.SelectData) -> str:
+    """Handle template selection from gallery"""
+    if evt.index < len(TEMPLATES):
+        return TEMPLATES[evt.index]["prompt"]
+    return ""
+
+def create_gallery_data():
+    """Create gallery data from templates"""
+    return [(template["image_url"], template["title"]) for template in TEMPLATES]
 
 with gr.Blocks() as demo:
     with gr.Tab("Image"):
@@ -77,9 +96,27 @@ with gr.Blocks() as demo:
             with gr.Column():
                 image_processing_image_input_component = gr.Image(
                     type='pil', label='Upload image')
-                text_prompt_component = gr.Textbox(
-                    label="Text prompt", placeholder="Enter comma separated text prompts"
+                
+                # Replace text prompt with gallery
+                template_gallery = gr.Gallery(
+                    value=create_gallery_data(),
+                    label="Manicure Template",
+                    show_label=True,
+                    elem_id="gallery",
+                    columns=4,
+                    rows=2,
+                    object_fit="contain",
+                    height="auto"
                 )
+                
+                # Hidden textbox to store selected prompt
+                selected_prompt = gr.Textbox(
+                    label="Selected Prompt",
+                    placeholder="Click on a template above to select a design",
+                    visible=True,
+                    interactive=True
+                )
+                
                 image_processing_submit_button_component = gr.Button(
                     value='Submit', variant='primary')
             with gr.Column():
@@ -87,22 +124,27 @@ with gr.Blocks() as demo:
                     type='pil', label='Image output')
                 image_processing_mask_output_component = gr.Image(
                     type='pil', label='Mask output')
-                # image_processing_text_output_component = gr.Textbox(
-                #     label='Caption output', visible=False)
 
+    # Handle template selection
+    template_gallery.select(
+        fn=on_template_select,
+        inputs=[],
+        outputs=[selected_prompt]
+    )
+
+    # Handle image processing
     image_processing_submit_button_component.click(
         fn=process_image,
         inputs=[
             image_processing_image_input_component,
-            text_prompt_component
+            selected_prompt
         ],
         outputs=[
             image_processing_image_output_component,
             image_processing_mask_output_component,
-            # image_processing_text_output_component
         ]
     )
 
 demo.launch(debug=False,
     server_name="0.0.0.0",
-    server_port=7778,)
+    server_port=7777,)
